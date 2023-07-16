@@ -2,7 +2,7 @@
 	Copyright 2017-2022 Ammar Muqaddas
 */
 
-#include "Modules.h"
+#include "TestModules.h"
 
 //----------------------------------------------------------
 // Exported functions
@@ -14,35 +14,28 @@ __declspec(dllexport) bool GetDllModule(DllModule *mi, char *vendorname)
 	// They are read by SoloRack from the xxxx.ini file, were xxxx.dll is the dll contaniing this requested module
 	// Returnes true if the operation is successful, otherwise false.
 
-	if (strcmp(mi->name,TestMixer::name)==0 && strcmp(vendorname,TestMixer::vendorname)==0)
-	{	mi->sdk_version = SDK_VERSION;
-		mi->name_len = TestMixer::name_len;		// Not neccessary.
-		
-		mi->InitializePtr = TestMixer::Initialize;
-		mi->EndPtr = TestMixer::End;
-		mi->Constructor = (Module *(*)(CFrame *,CControlListener *, const SynthComm*, const int)) TestMixer::Constructor;				// (Module *(__cdecl *)(CFrame *,CControlListener *)) 
-		mi->GetTypePtr = TestMixer::GetType;
-		mi->ActivatePtr = TestMixer::Activate;
-		mi->IsActivePtr = TestMixer::IsActive;
-		mi->GetProductNamePtr = TestMixer::GetProductName;
+	//#define CHOOSEMACRO(_1,_2,_3,_4,_5,_6,_7,_8,_9,NAME,...) NAME
+	//#define NOMODIF() return false;
+	//#define MODIF(...) CHOOSEMACRO(__VA_ARGS__,MODIFN,MODIFN,MODIFN,MODIFN,MODIFN,MODIFN,MODIFN,MODIFN,MODIF1)(__VA_ARGS__)
 
-		return true;
-	}
-	else if (strcmp(mi->name,TestTempoFromDAW::name)==0 && strcmp(vendorname,TestTempoFromDAW::vendorname)==0)
-	{	mi->sdk_version = SDK_VERSION;
-		mi->name_len = TestTempoFromDAW::name_len;		// Not neccessary.
-		
-		mi->InitializePtr = TestTempoFromDAW::Initialize;
-		mi->EndPtr = TestTempoFromDAW::End;
-		mi->Constructor = (Module *(*)(CFrame *,CControlListener *, const SynthComm*, const int)) TestTempoFromDAW::Constructor;				// (Module *(__cdecl *)(CFrame *,CControlListener *)) 
-		mi->GetTypePtr = TestTempoFromDAW::GetType;
-		mi->ActivatePtr = TestTempoFromDAW::Activate;
-		mi->IsActivePtr = TestTempoFromDAW::IsActive;
-		mi->GetProductNamePtr = TestTempoFromDAW::GetProductName;
-
-		return true;
+	#define IFMOD(classname)	\
+	if (strcmp(mi->name,classname::name)==0 && strcmp(vendorname,classname::vendorname)==0)	\
+	{	mi->sdk_version = SDK_VERSION;						\
+		mi->name_len = classname::name_len;					\
+		mi->InitializePtr = classname::Initialize;				\
+		mi->EndPtr = classname::End;							\
+		mi->Constructor = (Module *(*)(CFrame *,CControlListener *, const SynthComm*, const int)) classname::Constructor;	\
+		mi->GetTypePtr = classname::GetType;					\
+		mi->ActivatePtr = classname::Activate;					\
+		mi->IsActivePtr = classname::IsActive;					\
+		mi->GetProductNamePtr = classname::GetProductName;		\
+		return true;										\
 	}
 
+	IFMOD(TestMixer)
+	else IFMOD(TestTempoFromDAW)
+	// Add an 'else IFMOD()' for each of your modules here
+	// ....
 	else return false;
 }
 
@@ -77,34 +70,29 @@ __declspec(dllexport) bool GetDllModuleByIndex(DllModule *mi, int index)
 	// Returnes true if the operation is successful, otherwise false.
 	// Note, caller (SoloRack) should allocate the memory for name. enough space can be ensured by calling GetDllModuleNameLenByIndex() 
 
+	//#define CHOOSEMACRO(_1,_2,_3,_4,_5,_6,_7,_8,_9,NAME,...) NAME
+	//#define NOCASE(cn)
+	//#define MODCASE(...) CHOOSEMACRO(__VA_ARGS__,MODCASEN,MODCASEN,MODCASEN,MODCASEN,MODCASEN,MODCASEN,MODCASEN,MODCASEN,NOCASE)(__VA_ARGS__)
+
+	#define MODCASE(cn,classname)			\
+	case cn:								\
+	mi->sdk_version = SDK_VERSION;			\
+	strcpy(mi->name, classname::name);		\
+	mi->name_len = classname::name_len;		\
+	mi->InitializePtr = classname::Initialize;	\
+	mi->EndPtr = classname::End;				\
+	mi->Constructor = (Module * (*)(CFrame*, CControlListener*, const SynthComm*, const int)) classname::Constructor;	\
+	mi->GetTypePtr = classname::GetType;		\
+	mi->ActivatePtr = classname::Activate;		\
+	mi->IsActivePtr = classname::IsActive;		\
+	mi->GetProductNamePtr = classname::GetProductName;		\
+	break;
+
 	switch (index)
-	{	case 0:
-			mi->sdk_version = SDK_VERSION;
-			strcpy(mi->name,TestMixer::name);
-			mi->name_len = TestMixer::name_len;	
-
-			mi->InitializePtr = TestMixer::Initialize;
-			mi->EndPtr = TestMixer::End;
-			mi->Constructor = (Module *(*)(CFrame *,CControlListener *, const SynthComm*, const int)) TestMixer::Constructor;				// (Module *(__cdecl *)(CFrame *,CControlListener *)) 
-			mi->GetTypePtr = TestMixer::GetType;
-			mi->ActivatePtr = TestMixer::Activate;
-			mi->IsActivePtr = TestMixer::IsActive;
-			mi->GetProductNamePtr = TestMixer::GetProductName;
-			break;
-
-		case 1:
-			mi->sdk_version = SDK_VERSION;
-			strcpy(mi->name,TestTempoFromDAW::name);
-			mi->name_len = TestTempoFromDAW::name_len;	
-
-			mi->InitializePtr = TestTempoFromDAW::Initialize;
-			mi->EndPtr = TestTempoFromDAW::End;
-			mi->Constructor = (Module *(*)(CFrame *,CControlListener *, const SynthComm*, const int)) TestTempoFromDAW::Constructor;				// (Module *(__cdecl *)(CFrame *,CControlListener *)) 
-			mi->GetTypePtr = TestTempoFromDAW::GetType;
-			mi->ActivatePtr = TestTempoFromDAW::Activate;
-			mi->IsActivePtr = TestTempoFromDAW::IsActive;
-			mi->GetProductNamePtr = TestTempoFromDAW::GetProductName;
-			break;
+	{	MODCASE(0,TestMixer)
+		MODCASE(1,TestTempoFromDAW)
+		// Add MODCASE() for each of your modules here
+		// ....
 
 		default:
 			return false;

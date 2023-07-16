@@ -2301,7 +2301,8 @@ CCoord CDrawContext::getStringWidthUTF8 (const char* string)
 }
 
 //-----------------------------------------------------------------------------
-void CDrawContext::drawStringUTF8 (const char* string, const CPoint& _point, bool antialias)
+// vAlign param added but Ammar
+void CDrawContext::drawStringUTF8 (const char* string, const CPoint& _point, bool antialias, const CVertTxtAlign vAlign)
 {
 	if (string == 0 || font == 0)
 		return;
@@ -2399,7 +2400,15 @@ void CDrawContext::drawStringUTF8 (const char* string, const CPoint& _point, boo
 	{
 		UTF8StringHelper stringText (string);
 		pGraphics->SetTextRenderingHint (antialias ? Gdiplus::TextRenderingHintClearTypeGridFit : Gdiplus::TextRenderingHintSystemDefault);
-		Gdiplus::PointF gdiPoint ((Gdiplus::REAL)point.x, (Gdiplus::REAL)point.y + 1.f - pFont->GetHeight (pGraphics->GetDpiY ()));
+		
+		// Ammar. The problem here is GetHeight() includes line seperation and it some times doesn't wven work similarly
+		// across different OS versions. Add to that, font->getSize() is not really a good measure for font height.
+		// So in those situation, I'll just use the top coord and pinpoint where I want the text to be drwan
+		Gdiplus::PointF gdiPoint((Gdiplus::REAL)point.x, (Gdiplus::REAL)point.y + 1.f - ((vAlign == kTopTextWithTopCoord) ? 0 : pFont->GetHeight(pGraphics->GetDpiY())) );
+		
+		// Original
+		//Gdiplus::PointF gdiPoint ((Gdiplus::REAL)point.x, (Gdiplus::REAL)point.y + 1.f - pFont->GetHeight (pGraphics->GetDpiY ()));
+		
 		pGraphics->DrawString (stringText, -1, pFont, gdiPoint, pFontBrush);
 	}
 	#endif
@@ -2413,11 +2422,13 @@ void CDrawContext::drawStringUTF8 (const char* string, const CRect& _rect, const
 	
 	CRect rect (_rect);
 
-	if (vAlign==kTopText)		// Ammar
+	if (vAlign == kTopText)			// Ammar
 		rect.bottom -= rect.height() - font->getSize() + 1;
-	else if (vAlign==kBottomText)	// Ammar
+	else if (vAlign == kBottomText)	// Ammar
 		rect.bottom -= 1;
-	else rect.bottom -= rect.height ()/2 - font->getSize () / 2 + 1;	// Original (default now) is vertical centre
+	else if (vAlign == kVertCenterText) rect.bottom -= rect.height() / 2 - font->getSize() / 2 + 1;	// Original (default now) is vertical centre
+	// kTopTextWithTopCoord case. Ammar
+	else rect.top -= 1;
 
 	if (hAlign != kLeftText)
 	{
@@ -2439,7 +2450,9 @@ void CDrawContext::drawStringUTF8 (const char* string, const CRect& _rect, const
 	CRect newClip (_rect);
 	newClip.bound (oldClip);
 	setClipRect (newClip);
-	drawStringUTF8 (string, CPoint (rect.left, rect.bottom), antialias);
+	if (vAlign==kTopTextWithTopCoord)
+		drawStringUTF8(string, CPoint(rect.left, rect.top), antialias, kTopTextWithTopCoord);			// Ammar
+	else drawStringUTF8 (string, CPoint (rect.left, rect.bottom), antialias);							// Original
 	setClipRect (oldClip);
 }
 
@@ -3263,6 +3276,7 @@ CView::CView (const CRect& size)
 , pBackground (0)
 , pAttributeList (0)
 , autosizeFlags (kAutosizeNone)
+, last_parent(NULL)		// By Ammar
 {
 	#if DEBUG
 	gNbCView++;
@@ -3285,6 +3299,7 @@ CView::CView (const CView& v)
 , pBackground (v.pBackground)
 , pAttributeList (0)
 , autosizeFlags (v.autosizeFlags)
+, last_parent(NULL)		// By Ammar
 {
 	if (pBackground)
 		pBackground->remember ();
@@ -3345,6 +3360,7 @@ bool CView::removed (CView* parent)
 {
 	if (!isAttached ())
 		return false;
+	last_parent = pParentView;		// By Ammar.
 	pParentView = 0;
 	pParentFrame = 0;
 	bIsAttached = false;

@@ -1456,6 +1456,14 @@
 				RelativePath="..\source\ModuleWrapper.h"
 				>
 			</File>
+			<File
+				RelativePath="..\source\TestModules.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\source\TestModules.h"
+				>
+			</File>
 			<Filter
 				Name="vstgui"
 				>

@@ -1,5 +1,5 @@
-/*	SoloRack SDK v0.11 Beta
-	Copyright 2017-2022 Ammar Muqaddas
+/*	SoloRack SDK v0.2 Beta
+	Copyright 2017-2023 Ammar Muqaddas
 */
 
 #include <time.h>
@@ -9,92 +9,9 @@
 #endif
 
 
-extern OSVERSIONINFOEX	gSystemVersion;			// This is the one in VSTGUI. 
 
-// The folloiwng are just X,Y offsets that we use for pannels and positioning of controls. You can remove them if you don't need
-#define FIRST_KY	55
-#define FIRST_KY_DOWN	FIRST_KY+18
-#define FIRST_SKY_DANGLING		FIRST_KY-11
-#define FIRST_PPY	56
-#define FIRST_PPY_DOWN	FIRST_PPY+17
-#define FIRST_RIGHT_KX	62
-#define FIRST_LEFT_KX	32
-#define FIRST_LEFT_SKX	31
-#define FIRST_LEFT_PPX	16
-#define FIRST_RIGHT_PPX	72
-#define FIRST_RIGHT_PPX2	63
-#define XOFFSET 48
-#define YOFFSET	43
-#define YOFFSET_PP_SQWEEZE	32
-#define YOFFSET_SK_SQWEEZE	32
-#define PP_XOFFSET 31
-
-// Some more constants
-#define SCREW_X	9
-#define SCREW_Y	9
-#define NUM_PP_BITMAPS	8
-#define NUM_SCREW_BITMAPS	10
-#define MAIN_KNOB_IMAGES 49
-#define MAIN_KNOB_BIG_IMAGES 99
-#define SMALL_KNOB_GRAY_IMAGES	31
-#define SMALL_KNOB_BLUE_IMAGES	31
-#define LED_BLUE_IMAGES	10
-#define LED_RED_IMAGES	10
-#define DIGITS_RED_IMAGES	10
-#define DIGITS_RED_ALPHA_IMAGES	26
-#define DIGITS_PLUS_MINUS_IMAGES	3
-#define MIN_PW		0.01
-#define RNG_PW		0.98
-#define MAX_PW		(MIN_PW+RNG_PW)
-#define HALF_PW		((MIN_PW+MAX_PW)/2)
-#define CLOCK_WIDTH			0.3					// Percentage of the total clock cycle
-#define CLIPTIME 0.2							// Clip led pulse time in seconds
-#define TRIGTIME 0.1							// Trigger led pulse time in seconds
-#define LMIDITIME	0.1							// MIDI led pulse time in seconds
-#define MAX_CLOCK_WIDTH		0.1					// Max clock pulse width is seconds
-#define LED_PULSE_TIME		0.1					// Reasonably visible pulse time (sec)
-#define SMOOTH_DELAY		35					// (was 45) Time in milliseconds to allow a knob to reach it's value smoothly.
-#define HIGH_CV				0.25				
-#define LOW_CV				0.15
-#define MID_CV				((LOW_CV+HIGH_CV)/2.0)
-#define VERY_HIGH_CV		4.0
-#define MAX_LEVEL			(clip_level)
-#define DEFAULT_MAX_LEVEL	4.0					// 12db
-#define MIDI_TUNE_FACTOR	10.0				// The factor to achieve 0.1/oct tunning
-#define MIDI_MAX_DELAY		0.002				// SMALL. For some Generators. In seconds. Dictates MIDI buffer sizes
-#define MIDI_MAX_DELAY2		0.006				// MEDIUM. For mergers and such. In seconds. Dictates MIDI buffer sizes
-#define LOG2				0.69314718055994529
-#define LOG10				2.30258509299405
-#define DENORMAL			0.0000000000001
-#undef NONE_CPP_DESTRUCTOR
-
-
-// Supports automatic 14bit/7bit CC changes regardless of the type of controller used.
-#define CCHANGE(midi,msb,last_msb,lsb,conmsb,conlsb,val,drag_lsb,no_hold_lsb)		\
-	/* MSB */								\
-	case (char)conmsb:						\
-		msb=midi.data2;						\
-		/* Drag LSB If hi res 14bit MIDI is enabled. Maily to handle erratic jumping or delayed LSB */		\
-		if (drag_lsb)									\
-		{	if (msb>last_msb) lsb=(char)0;			\
-			else if (msb<last_msb) lsb=(char)127;	\
-			last_msb = msb;					\
-		}									\
-		temp=MSBLSB(msb,lsb);				\
-		val=temp/16383.0;					\
-		break;								\
-	/* LSB */								\
-	case (char)conlsb:						\
-		lsb=midi.data2;						\
-		if (no_hold_lsb) { temp=MSBLSB(msb,lsb); val=temp/16383.0;	}				\
-		break;	
-
-
-// Greatest Common Divider
-int gcd(int a, int b) 
-{	if (b == 0) return a; 
-	return gcd(b, a % b);  
-}
+// This is the one in VSTGUI. 
+extern OSVERSIONINFOEX	gSystemVersion;	
 
 // MIDI Frequencies Table
 float mfreqtab[128];
@@ -102,7 +19,13 @@ float mfreqtab[128];
 // for Park-Miller random generator
 unsigned int zgen;
 
-//Product Module::vproduct("M",0,NULL,true);
+
+
+// Greatest Common Divider
+int gcd(int a, int b) 
+{	if (b == 0) return a; 
+	return gcd(b, a % b);  
+}
 
 int IntPow(int base, int exp)
 {	int i, out;
@@ -120,6 +43,7 @@ int IntLog(int v, int base)
 	return out;
 }
 
+
 // Stack definitions and implementation
 template <typename TP>
 void InitStack(cstack<TP> &stackv,int size)
@@ -134,13 +58,6 @@ void FreeStack(cstack<TP> &stackv)
 	{	free(stackv.pbottom); stackv.pbottom=NULL;
 	}
 }
-
-#define PUSH(stackv,value) stackv.pbottom[++stackv.top]=value
-#define POP(stackv) stackv.pbottom[stackv.top--]
-#define FLUSHPOP(stackv) stackv.top--
-#define NOTEMPTY(stackv) stackv.top!=-1
-#define QISFULL(evin,evout,qsize)	(evin-evout==-1 || evin-evout==ev_qsize-1)
-
 
 inline void ForceInside(long &x, long &y,const CRect &r,const CRect &rpar)
 {	// rpar is rect of the container (parent)
@@ -234,28 +151,27 @@ PatchPoint::PatchPoint(const CRect& size, CControlListener* listener, long tag, 
 	peditor = (SynEditor *) listener;
 }
 
-inline void PatchPoint::SetCenterOffset(char x, char y)
+void PatchPoint::SetCenterOffset(char x, char y)
 {	coff_x = x; coff_y = y;
 }
 
-inline void PatchPoint::SetType(int pptype)
+void PatchPoint::SetType(int pptype)
 {	type=pptype;
 }
 
-inline void PatchPoint::SetProtocol(int ppprotocol)
+void PatchPoint::SetProtocol(int ppprotocol)
 {	protocol=ppprotocol;
 }
 
-//inline void PatchPoint::SetPPTag(long tag)
+//void PatchPoint::SetPPTag(long tag)
 //{	// This functoion is used exclusivly by SoloRack. It should not be called by modules
 //	pptag = tag;
 //}
 //
-//inline long PatchPoint::GetPPTag()
+//long PatchPoint::GetPPTag()
 //{	return pptag;
 //}
 
-//#ifndef IS_DLL_MODULES
 CMouseEventResult PatchPoint::onMouseDown (CPoint &where, const long& buttons)
 {	// All this mess is for Dll modules. This also assumes a module is the direct parent of the patchpoint
 	return ((Module *)getParentView())->synth_comm.PPOnMouseDownPtr(this,where,buttons);
@@ -284,7 +200,7 @@ CMessageResult PatchPoint::notify(CBaseObject* sender, const char* message)
 ModuleKnob::ModuleKnob(const CRect& size, CControlListener* listener, long tag, CBitmap* background, Module *parent, const CPoint &offset)
 : CAnimKnob(size,listener,tag,background,offset)
 , is_stepping(false)
-{	svalue=qvalue=value;
+{	svalue=qvalue=value; mvalue=0.0;
 	SetSmoothDelay(SMOOTH_DELAY,parent);
 	setZoomFactor(5.0);
 }
@@ -292,7 +208,7 @@ ModuleKnob::ModuleKnob(const CRect& size, CControlListener* listener, long tag, 
 ModuleKnob::ModuleKnob (const CRect& size, CControlListener* listener, long tag, long subPixmaps, CCoord heightOfOneImage, CBitmap* background, Module *parent, const CPoint &offset)
 : CAnimKnob(size,listener,tag,subPixmaps,heightOfOneImage,background,offset)
 , is_stepping(false)
-{	svalue=qvalue=value; 
+{	svalue=qvalue=value; mvalue=0.0;
 	SetSmoothDelay(SMOOTH_DELAY,parent);
 	setZoomFactor(5.0);
 }
@@ -300,12 +216,12 @@ ModuleKnob::ModuleKnob (const CRect& size, CControlListener* listener, long tag,
 ModuleKnob::ModuleKnob (const ModuleKnob& v)
 : CAnimKnob(v)
 , is_stepping(false)
-{	svalue=qvalue=value;
+{	svalue=qvalue=value; mvalue=v.mvalue;
 	SetSmoothDelay(SMOOTH_DELAY,NULL);
 }
 
 void ModuleKnob::UpdateQValue()
-{	// Update Quantized value
+{	// Update Quantized value. (It's beter to just use the newer GetCurrentStep(). Much easier)
 	// This has to be called manually like in ValueChanged. Because VSTGUI does not call setValue but changes values directly.
 	// I could have done it automatically, but I opted out for performance issues. I will leave to the developer
 
@@ -335,18 +251,15 @@ CMouseEventResult ModuleKnob::onMouseMoved(CPoint& where, const long& buttons)
 }
 
 
-void ModuleKnob::SetSmoothDelay(int del, Module *parent)
+void ModuleKnob::SetSmoothDelay(float del, Module *parent)
 {	// getParentView() does not seam to work when the parent is still in it's constructor.
 	// So you have to pass it as parent in this situation.
 	
-	if (del>=0) delay=del;
+	if (del>=0.f) delay=del;
 
 	if (parent==NULL) parent=(Module *) getParentView();
-	//if (parent!=NULL)								//**
-		smooth_samples=parent->sample_rate/1000.0*delay;
-		//if (smooth_samples>30000) smooth_samples=30000;
-	//else
-	//	smooth_samples=Module/1000.0*delay;
+		// This was the 'reciprocal' prior to SDK version 0.12
+		smooth_samples_1 = 1000.0 / (parent->sample_rate * delay);
 }
 
 //---------------------------------------------
@@ -930,7 +843,7 @@ void CTextLabelEx::draw(CDrawContext *pContext)
 
 //---------------------------------------------
 // Base Module Class
-CBitmap **Module::mcbits = NULL;			// Bitmap(s) of the main patchpoints
+CBitmap **Module::mcbits = NULL;			// Main bitmap(s) array for most controls
 CBitmap **Module::ppbit = NULL;				// Bitmap(s) of the main patchpoints
 char *Module::skindir = NULL;
 char *Module::defskindir = NULL;
@@ -1076,7 +989,7 @@ void Module::Initialize()
 		a *= k;
 	}
 
-	// Get OS version, Required by VSTGUI. This would have been done if CFrame() was called
+	// Get OS version, Required by VST gui. This would have been done if CFrame() was called
 	memset(&gSystemVersion, 0, sizeof (gSystemVersion));
 	gSystemVersion.dwOSVersionInfoSize = sizeof (gSystemVersion);
 	GetVersionEx((OSVERSIONINFO *)&gSystemVersion);
@@ -1218,7 +1131,7 @@ void Module::ProcessEvents(const EventsHandle ev)
 {
 }
 
-inline void Module::StartOfBlock(int sample_frames)	
+void Module::StartOfBlock(int sample_frames)	
 {	// Called by SoloRack on the start of each block, for all modules that called CallProcessEvents()
 }
 
@@ -1236,7 +1149,7 @@ void Module::InitPatchPoints(float init)
 	}
 }
 
-inline void Module::ProcessSample()
+void Module::ProcessSample()
 {
 }
 
@@ -1414,10 +1327,35 @@ int Module::GetControlsValuesSize()
 	return nbcontrols*sizeof(float);									// must be type of CControl::value
 }
 
+// Introduced for CLAP host modulation
+void Module::ZeroDAWModValues()
+{
+	CCView *ptemp;
+	ModuleKnob *knob;
+	float ft;
+
+	if (synth_comm.GetPluginFormat(peditor)==CLAP_FORMAT)
+	{	ptemp=pFirstView;
+		while (ptemp)
+		{	if (ptemp->pView->isTypeOf("ModuleKnob"))
+			{	knob = (ModuleKnob*) ptemp->pView;
+				if (knob->mvalue!=0.f)
+				{	ft = knob->value-knob->mvalue;
+					knob->setValue(CLIP(ft,0.f,1.f));
+					knob->mvalue=0.0;
+					ValueChanged(knob);
+				}
+			}
+			ptemp = ptemp->pNext;
+		}
+	}
+}
+
 void Module::SaveControlsValues(void *pdata)
 {	float *pfdata = (float *) pdata;							// This type must be the same type as value/getValue()
 	CCView *ptemp=pFirstView;
 
+	ZeroDAWModValues();
 	while (ptemp)
 	{	if (ptemp->pView->isTypeOf("CControl"))
 		{	if (((CControl *)(ptemp->pView))->getTag()!=NOSAVE_TAG)
@@ -1495,8 +1433,8 @@ const int Module::GetType()
 {	return -1;
 }
 
-void Module::SetKnobsSmoothDelay(int del)
-{	//del=-1 will use the same delay already assciated with each knob. This function will be called by solorack when sample rate changes too because variable smooth_samples has to be recalculated
+void Module::SetKnobsSmoothDelay(float del)
+{	//del=-1 will use the same delay already assciated with each knob. This function will be called by solorack when sample rate changes too because variable smooth_samples_1 has to be recalculated
 	CCView *ptemp=pFirstView;
 
 	while (ptemp)				//** && pfdata<pdata+(size/sizeof(*pfdata))
@@ -1798,76 +1736,76 @@ CHorizontalSlider *Module::AddHorizontalSlider(float x, float y, float width, fl
 }
 
 
-inline void Module::SendAudioToDAW(float left, float right)
+void Module::SendAudioToDAW(float left, float right)
 {	synth_comm.ModuleSendAudioToDAW1Ptr(this,left,right);
 }
 
-inline void Module::SendAudioToDAW(PatchPoint **pps_outputs)
+void Module::SendAudioToDAW(PatchPoint **pps_outputs)
 {	// INs of patchpoints will be sent to DAW outs
 	// NULL indicates the end of the array. Advantage is that there is no num_inputs to pass.
 	synth_comm.ModuleSendAudioToDAW2Ptr(this,pps_outputs);
 }
 
-inline void Module::SendAudioToDAW(PatchPoint **pps_outputs, int first_output)
+void Module::SendAudioToDAW(PatchPoint **pps_outputs, int first_output)
 {	// INs of patchpoints will be sent to DAW outs
 	// NULL indicated the end of the array. Advantage is that there is no last_output to pass.
 	// Sending will start from pps_outputs[first_output]
 	synth_comm.ModuleSendAudioToDAW3Ptr(this,pps_outputs,first_output);
 }
 
-inline void Module::SendAudioToDAW(float *outputs, int last_output)
+void Module::SendAudioToDAW(float *outputs, int last_output)
 {	// Send audio to DAW from an array of float. Sending will stop at outputs[last_output]
 	synth_comm.ModuleSendAudioToDAW4Ptr(this,outputs,last_output);
 }
 
-inline void Module::SendAudioToDAW(float *outputs, int first_output, int last_output)
+void Module::SendAudioToDAW(float *outputs, int first_output, int last_output)
 {	// Send audio to DAW from an array of float
 	// Sending will start from outputs[first_output] and will stop at outputs[last_output]
 	synth_comm.ModuleSendAudioToDAW5Ptr(this,outputs,first_output,last_output);
 }
 
-inline void Module::ReceiveAudioFromDAW(float *left, float *right)
+void Module::ReceiveAudioFromDAW(float *left, float *right)
 {	synth_comm.ModuleReceiveAudioFromDAW1Ptr(this,left,right);
 }
 
-inline void Module::ReceiveAudioFromDAW(PatchPoint **pps_inputs)
+void Module::ReceiveAudioFromDAW(PatchPoint **pps_inputs)
 {	// Outs of patch points will be filled with audio from DAW
 	// NULL indicates the end of the array. Advantage is that there is no last_output to pass.
 	synth_comm.ModuleReceiveAudioFromDAW2Ptr(this,pps_inputs);
 }
 
-inline void Module::ReceiveAudioFromDAW(PatchPoint **pps_inputs, int first_input)
+void Module::ReceiveAudioFromDAW(PatchPoint **pps_inputs, int first_input)
 {	// Outs of patch points will be filled with audio from DAW
 	// NULL indicates the end of the array. Advantage is that there is no num_inputs to pass.
 	// Recieving will start from pps_inputs[first_output]
 	synth_comm.ModuleReceiveAudioFromDAW3Ptr(this,pps_inputs,first_input);
 }
 
-inline void Module::ReceiveAudioFromDAW(float *inputs, int last_input)
+void Module::ReceiveAudioFromDAW(float *inputs, int last_input)
 {	// Recieve audio from DAW to an array of float. Will stop at inputs[last_input]
 	synth_comm.ModuleReceiveAudioFromDAW4Ptr(this,inputs,last_input);
 }
 
-inline void Module::ReceiveAudioFromDAW(float *inputs, int first_input, int last_input)
+void Module::ReceiveAudioFromDAW(float *inputs, int first_input, int last_input)
 {	// Recieve audio from DAW to an array of float. Receiving will start at inputs[first_output] and will stop at inputs[last_input] 
 	synth_comm.ModuleReceiveAudioFromDAW5Ptr(this,inputs,first_input,last_input);
 }
 
-inline int Module::GetNumberOfAudioFromDAW()
+int Module::GetNumberOfAudioFromDAW()
 {	return synth_comm.ModuleGetNumberOfAudioFromDAWPtr(this);
 }
 
-inline int Module::GetNumberOfAudioToDAW()
+int Module::GetNumberOfAudioToDAW()
 {	return synth_comm.ModuleGetNumberOfAudioToDAWPtr(this);
 }
 
-inline void Module::EnterProcessingCriticalSection()
+void Module::EnterProcessingCriticalSection()
 {	// Once called, it will block audio processing until LeaveProcessingCriticalSection() is called.
 	// This means that ProcessSample() will not be called for any module while this module has not left the critical section.
 	synth_comm.ModuleEnterProcessingCriticalSectionPtr(this);
 }
 
-inline void Module::LeaveProcessingCriticalSection()
+void Module::LeaveProcessingCriticalSection()
 {	synth_comm.ModuleLeaveProcessingCriticalSectionPtr(this);
 }
 
@@ -2013,360 +1951,5 @@ float Module::GetClipLevelPreset(int v)
 		case k6db: return 2.0;
 		case k12db: default: return 4.0;
 	}	
-}
-
-
-//---------------------------------------------
-// TestMixer
-CBitmap *TestMixer::panel = NULL;
-char *TestMixer::name = "Test Mixer";
-int TestMixer::name_len=0;
-char *TestMixer::vendorname = "SoloStuff";
-int TestMixer::vendorname_len=0;
-Product *TestMixer::pproduct = NULL;
-
-TestMixer::TestMixer(CFrame *pParent, CControlListener *listener,const SynthComm *psynth_comm, const int vvoice)
-: Module(CRect(0, 0, panel->getWidth(), panel->getHeight()),pParent,panel,psynth_comm,vvoice)
-{	int i;
-	long tag;
-	PatchPoint *temp[5];
-
-	// Create The Knobs
-	kin1 = AddModuleKnob(FIRST_RIGHT_KX,FIRST_KY,mcbits[knobit],MAIN_KNOB_IMAGES,false,listener);
-	kin1->setValue(0.5); kin1->svalue=0.5; //ADDPOOLKNOB(chpool,kin1);
-
-	kin2 = AddModuleKnob(FIRST_RIGHT_KX,FIRST_KY+YOFFSET,mcbits[knobit],MAIN_KNOB_IMAGES,false,listener);
-	kin2->setValue(0.5); kin2->svalue=0.5; //ADDPOOLKNOB(chpool,kin2);
-
-	kin3 = AddModuleKnob(FIRST_RIGHT_KX,FIRST_KY+2*YOFFSET,mcbits[knobit],MAIN_KNOB_IMAGES,false,listener);
-	kin3->setValue(0.5); kin3->svalue=0.5; //ADDPOOLKNOB(chpool,kin3);
-
-	kout = AddModuleKnob(FIRST_RIGHT_KX,FIRST_KY+4*YOFFSET,mcbits[knobit],MAIN_KNOB_IMAGES,false,listener);
-	kout->setValue(1.0); kout->svalue=1.0; //ADDPOOLKNOB(chpool,kout);
-
-	// Create Patch Points
-	for (i=0; i<5; i++)
-		temp[i] = AddPatchPoint(FIRST_LEFT_PPX,FIRST_PPY+i*YOFFSET,ppTypeInput,ppbit,RAND_BITMAP,listener);
-	ppin1=temp[0]; ppin2=temp[1]; ppin3=temp[2]; ppin4=temp[3]; ppout=temp[4];
-	ppout->SetType(ppTypeOutput);
-
-	ppin5 = AddPatchPoint(62,FIRST_PPY+3*YOFFSET,ppTypeInput,ppbit,RAND_BITMAP,listener);
-
-	// Create inverter switch
-	//CRect r = CRect(0,0,1,1);
-	//r.moveTo(36-mcbits[vert_swbit]->getWidth()/2, 256-mcbits[vert_swbit]->getHeight()/4);
-	//r.setSize(CPoint(mcbits[vert_swbit]->getWidth(),mcbits[vert_swbit]->getHeight()/2));
-	//sw1 = new CVerticalSwitch(r,listener,tag=GetFreeTag(),mcbits[vert_swbit]); addView(sw1); RegisterTag(sw1,tag);
-	sw1 = AddVerticalSwitch(36,255,mcbits[vert_swbit],2,listener);
-
-	// Put some screws
-	PutLeftScrews(screw1,screw2,listener);
-
-	InitPatchPoints(0.0);
-
-	// Pretend that the switch value has changed so that correct settings are applied
-	ValueChanged(sw1);
-}
-
-//TestMixer::~TestMixer()
-//{	
-//	
-//}
-
-
-// SoloRack calls this. It can't directly access rhe constructor since this is a Dll and pointers to constructor can not be easily achieved.
-TestMixer *TestMixer::Constructor(CFrame *pParent, CControlListener *listener,const SynthComm *psynth_comm, const int vvoice)
-{	return new TestMixer(pParent,listener,psynth_comm,vvoice);
-}
-
-void TestMixer::Initialize()
-{	char *stemp;
-	
-	panel = new CBitmap(dllskindir,NULL,"TestMixer.png");
-	name_len = strlen(name); vendorname_len = strlen(vendorname);
-}
-
-void TestMixer::End()
-{	panel->forget();
-	if (pproduct!=NULL) delete pproduct;
-}
-
-const char * TestMixer::GetName()
-{	return name;
-}
-
-const int TestMixer::GetNameLen()
-{	return name_len;
-}
-
-const char * TestMixer::GetVendorName()
-{	return vendorname;
-}
-
-const int TestMixer::GetVendorNameLen()
-{	return vendorname_len;
-}
-
-const int TestMixer::GetType()
-{	return kMixerPanner;
-}
-
-Product *TestMixer::Activate(char *fullname, char *email, char *serial)
-{	// Replace this with your own implementation
-	// This should return a pointer to the activated product. Or NULL if activation fails
-	// In our TestMixer, NULL is retuned because the module is already active all the time, so no need to activate.
-	return NULL;
-
-	// Here is a simplistic example.
-	//if (pproduct!=NULL) delete pproduct;
-	//pproduct = new Product(0,1,NULL,false,"SoloStuff TestMixer");		// Product names has to include vendor name to ensure uniquenes
-	//return pproduct->Activate(fullname,email,serial);
-}
-
-bool TestMixer::IsActive()
-{	// This test module is Active. Replace this with your own check. 
-	// It's better not to store this active/inactive status in an obvious place in memory, like a data member of the module or like that.
-	// It's even better if the status is not stored at all, but rather a sophisticated test is done
-	return true;
-
-	// simple example
-	//if (pproduct!=NULL) return pproduct->IsActive(); else return false;
-}
-
-Product *TestMixer::InstanceActivate(char *fullname, char *email, char *serial)
-{	return this->Activate(fullname,email,serial);
-}
-
-bool TestMixer::InstanceIsActive()
-{	return this->IsActive();
-}
-
-const char *TestMixer::GetProductName()
-{	// Change this to your own product name. Product names should include the vendor name to avoid conflicts with other vendor modules in the config.ini
-	return "SoloStuff TestMixer";
-}
-
-void TestMixer::ValueChanged(CControl* pControl)
-{	if (pControl==sw1)
-		invert = (sw1->value>=0.5);		// 0.5 and above visualy displays as image 1, anything less than 0.5, displayes as image 0
-	
-	// If a knob change pool is defined
-	/*else
-	{	bool result;
-		IS_KNOB_IN_POOL(chpool,pControl,result);
-		if (result)
-		{	EnterProcessingCriticalSection();
-			POOL_KNOB_VALUECHANGED(chpool,pControl);
-			LeaveProcessingCriticalSection();
-		}
-	}*/
-		
-}
-
-inline void TestMixer::ProcessSample()
-{	float temp;
-	
-	// Update smooth values.
-	// If there are too many of those smoothed knobs, then its more CPU efficient to use a knob change pool using the ModuleKnobExPool class
-	kin1->UpdateSValue();
-	kin2->UpdateSValue();
-	kin3->UpdateSValue();
-	kout->UpdateSValue();
-
-	// Mixer
-	temp = kout->svalue*(ppin1->in*kin1->svalue+ppin2->in*kin2->svalue+ppin3->in*kin3->svalue+ppin4->in+ppin5->in);
-	if (invert)
-		ppout->out = -temp;
-	else 
-		ppout->out = temp;
-}
-
-
-//---------------------------------------------
-// TestTempoFromDAW
-// This module is identical to our SA04 except for the GUI.
-CBitmap *TestTempoFromDAW::panel = NULL;
-char *TestTempoFromDAW::name = "Test Tempo From DAW";
-int TestTempoFromDAW::name_len=0;
-char *TestTempoFromDAW::vendorname = "SoloStuff";
-int TestTempoFromDAW::vendorname_len=0;
-
-TestTempoFromDAW::TestTempoFromDAW(CFrame *pParent, CControlListener *listener,const SynthComm *psynth_comm, const int vvoice)
-: Module(CRect(0, 0, panel->getWidth(), panel->getHeight()),pParent,panel,psynth_comm,vvoice)
-{	int i, hw;
-	long tag;
-
-	hw = 23;
-
-	// Create Patch Points
-	ppclock = AddPatchPoint(hw,198,ppTypeOutput,ppbit,RAND_BITMAP,listener);
-
-	pprestart = AddPatchPoint(hw,75,ppTypeInput,ppbit,RAND_BITMAP,listener);
-
-	// Create divisor knob
-	kdivisor = this->AddModuleKnob(hw,157,mcbits[sknobit_black5],5,true,listener);
-	kdivisor->setValue(1.0);
-
-	// Put leds
-	lclock = AddMovieBitmap(hw,222,mcbits[led_blue],LED_BLUE_IMAGES,listener);
-
-	// Put some screws
-	PutLeftScrews(screw1,screw2,listener);
-
-	InitPatchPoints(0.0);
-
-	// Simulate the value change to initialize divisor value
-	ValueChanged(kdivisor);
-
-	// Tell SoloRack that this module needs a call to StartOfBlock() at the start of each block
-	CallStartOfBlock();
-
-	ppqpos=0; pspc=0; chigh=MAX_INT, last_restart=0; 
-
-}
-
-//TestTempoFromDAW::~TestTempoFromDAW()
-//{
-//}
-
-// SoloRack calls this. It can't directly access rhe constructor since this is a Dll and pointers to constructor can not be easily achieved.
-TestTempoFromDAW *TestTempoFromDAW::Constructor(CFrame *pParent, CControlListener *listener,const SynthComm *psynth_comm, const int vvoice)
-{	return new TestTempoFromDAW(pParent,listener,psynth_comm,vvoice);
-}
-
-const char *TestTempoFromDAW::GetProductName()
-{	// Change this to your own product name. Product names should include the vendor name to avoid conflicts with other vendor modules.
-	return "SoloStuff Test Tempo From DAW";
-}
-
-void TestTempoFromDAW::Initialize()
-{	panel = new CBitmap(dllskindir,NULL,"TestTempoFromDAW.png");
-	name_len = strlen(name); vendorname_len = strlen(vendorname);
-}
-
-void TestTempoFromDAW::End()
-{	panel->forget();
-}
-
-const char * TestTempoFromDAW::GetName()
-{	return name;
-}
-
-const int TestTempoFromDAW::GetNameLen()
-{	return name_len;
-}
-
-const char * TestTempoFromDAW::GetVendorName()
-{	return vendorname;
-}
-
-const int TestTempoFromDAW::GetVendorNameLen()
-{	return vendorname_len;
-}
-
-
-const int TestTempoFromDAW::GetType()
-{	return kFromToDAW;
-}
-
-Product *TestTempoFromDAW::Activate(char *fullname, char *email, char *serial)
-{	// Replace this with your own implementation
-	// This should return a pointer to the activated product. Or NULL if activation fails
-	// In our TestTempoFromDAW, NULL is retuned because the module is already active all the time, so no need to activate.
-	return NULL;
-
-	// Here is a simplistic example.
-	//if (pproduct!=NULL) delete pproduct;
-	//pproduct = new Product(0,1,NULL,false,"SoloStuff Test Tempo From DAW");		// Product names has to include vendor name to ensure uniquenes
-	//return pproduct->Activate(fullname,email,serial);
-}
-
-bool TestTempoFromDAW::IsActive()
-{	// This test module is Active. Replace this with your own check. 
-	// It's better not to store this active/inactive status in an obvious place in memory, like a data member of the module or like that.
-	// It's even better if the status is not stored at all, but a rather sophisticated test is done
-	return true;
-
-	// simple example
-	//if (pproduct!=NULL) return pproduct->IsActive(); else return false;
-}
-
-
-Product *TestTempoFromDAW::InstanceActivate(char *fullname, char *email, char *serial)
-{	return this->Activate(fullname,email,serial);
-}
-
-bool TestTempoFromDAW::InstanceIsActive()
-{	return this->IsActive();
-}
-
-void TestTempoFromDAW::ValueChanged(CControl* pControl)
-{	//if (pControl==kdivisor) kdivisor->UpdateQValue();
-	if (pControl==kdivisor) divisor = kdivisor->GetCurrentStep();
-}
-
-void TestTempoFromDAW::SetSampleRate(float sr)
-{	Module::SetSampleRate(sr);
-	
-	tempo_smp = tempo/sample_rate60;
-	//pspc=CLOCK_WIDTH*sample_rate60/(tempo*mult);
-	pspc=CLOCK_WIDTH/(tempo_smp*mult);
-}
-
-void TestTempoFromDAW::LoadPreset(void *pdata, int size, int version)
-{	LoadControlsValues(pdata,size);
-
-	// Make sure LEDs are not affected incorrectly.
-	lclock->setValue(ppclock->out);
-}
-
-inline void TestTempoFromDAW::ProcessSample()
-{	
-	// Reset phase if restart is high cv
-	if (last_restart<HIGH_CV && pprestart->in>=HIGH_CV) 
-	{	// If the clock is already high, make it low, then make it high in the next sample.
-		if (ppclock->out>=HIGH_CV)
-		{	ppqpos=1; ppclock->out=0;
-			
-			lclock->value=0.0; //lclock->setDirty(true);
-			/* Note: there is no use of setdirty() here. VSTGUI will detect change in value and update the GUI latter.
-			Most importantly, it's better not to use Invalid() in ProcessSample() unless you absolutly have to
-			Invalid() will trigger an imidiate change to the update region of the control's GUI, which will be very bad for CPU when 
-			done at audio rate.
-			*/
-		}
-		else 
-		{	ppqpos=0; ppclock->out=1; chigh=pspc; 
-			
-			lclock->value=1.0; //lclock->setDirty(true);
-		}
-		last_restart=1; return;
-	}
-	else 
-	{	ppqpos+=tempo_smp;
-		if (ppqpos>=1.0)
-		{	ppqpos-=1.0;
-			ppclock->out=1; chigh=pspc; lclock->value=1.0; //lclock->setDirty(true);
-			last_restart=pprestart->in; return;
-		}
-	}
-	last_restart=pprestart->in;
-
-	
-	// So there is no clock now. Setting chigh=MAX_INT to eventually avoid doing two if statements. Wierd, I know, but works.
-	chigh--;
-	if (chigh==0) { ppclock->out=0; chigh=MAX_INT; lclock->value=0.0; /*lclock->setDirty(true);*/ }
-}
-
-
-void TestTempoFromDAW::StartOfBlock(int sample_frames)
-{	static float mul[5] = {24, 8, 4, 2, 1};			// Divisor = 24/mul[]
-	
-	// Get DAW tempo
-	DAWTempoPos tp;
-	synth_comm.GetDAWTime(peditor,&tp,NULL);
-	mult = mul[divisor];
-	tempo_smp = mult*(tempo=tp.tempo)/sample_rate60; //ppqpos=tinf->ppqPos; //temp=ppqpos-last_ppqpos; 
-	pspc=CLOCK_WIDTH/tempo_smp;	
 }
 

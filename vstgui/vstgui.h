@@ -532,7 +532,8 @@ enum CVertTxtAlign
 {
 	kTopText = 0,
 	kVertCenterText,
-	kBottomText
+	kBottomText,
+	kTopTextWithTopCoord			// Uses top AND top cordinate (instead of bottom) for problamatic cases with some fonts that don't report the height correctly.
 };
 
 //----------------------------
@@ -816,7 +817,7 @@ public:
 	//void drawStringUTF8 (const char* pString, const CRect& rect, const CHoriTxtAlign hAlign = kCenterText, bool antialias = true);	///< draw an UTF-8 encoded string
 	// Modified by Ammar to add vAlign
 	void drawStringUTF8 (const char* pString, const CRect& rect, const CHoriTxtAlign hAlign = kCenterText, bool antialias = true, const CVertTxtAlign vAlign = kVertCenterText);	///< draw an UTF-8 encoded string
-	void drawStringUTF8 (const char* string, const CPoint& _point, bool antialias = true);											///< draw an UTF-8 encoded string
+	void drawStringUTF8 (const char* string, const CPoint& _point, bool antialias = true, const CVertTxtAlign vAlign = kVertCenterText);											///< draw an UTF-8 encoded string
 	//@}
 	
 	void *getWindow () { return pWindow; }
@@ -1206,6 +1207,15 @@ public:
 	{ 
 		return pParentView; 
 	}										///< get parent view
+	
+	// By Ammar. To keep returning the parent while view is detached.
+	// Since a view can still be part of a container while it has been detached!!
+	// I have no idea why they did it this way. May be there is a good reason.
+	CView  *GetPersistentParentView() const 
+	{ 
+		if (pParentView!=NULL) return pParentView; 
+		else return last_parent;
+	}
 	CFrame *getFrame () const { return pParentFrame; }											///< get frame
 	virtual VSTGUIEditorInterface *getEditor () const;											///< get editor
 	//@}
@@ -1253,6 +1263,9 @@ protected:
 	
 	CBitmap* pBackground;
 	CAttributeListEntry* pAttributeList;
+
+	CView *last_parent;					// By Ammar, to support automation while view is hidden
+										// Since pParentView == NULL in that case
 };
 
 extern const char* kMsgCheckIfViewContainer;	///< Message to check if View is a CViewContainer

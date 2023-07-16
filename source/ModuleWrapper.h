@@ -53,21 +53,21 @@ public:
 	virtual bool GetIsMonoDefault()=0;
 	virtual bool IsAudioToDAW()=0;
 	virtual bool IsPolyManager()=0;
-	virtual inline void SendAudioToDAW(float left, float right)=0;
-	virtual inline void SendAudioToDAW(PatchPoint **pps_outputs)=0;
-	virtual inline void SendAudioToDAW(PatchPoint **pps_outputs, int first_output)=0;
-	virtual inline void SendAudioToDAW(float *outputs, int last_output)=0;
-	virtual inline void SendAudioToDAW(float *outputs, int first_output, int last_output)=0;
+	virtual void SendAudioToDAW(float left, float right)=0;
+	virtual void SendAudioToDAW(PatchPoint **pps_outputs)=0;
+	virtual void SendAudioToDAW(PatchPoint **pps_outputs, int first_output)=0;
+	virtual void SendAudioToDAW(float *outputs, int last_output)=0;
+	virtual void SendAudioToDAW(float *outputs, int first_output, int last_output)=0;
 
-	virtual inline void ReceiveAudioFromDAW(float *left, float *right)=0;
-	virtual inline void ReceiveAudioFromDAW(PatchPoint **pps_inputs)=0;
-	virtual inline void ReceiveAudioFromDAW(PatchPoint **pps_inputs, int first_input)=0;
-	virtual inline void ReceiveAudioFromDAW(float *inputs, int last_input)=0;
-	virtual inline void ReceiveAudioFromDAW(float *inputs, int first_input, int last_input)=0;
+	virtual void ReceiveAudioFromDAW(float *left, float *right)=0;
+	virtual void ReceiveAudioFromDAW(PatchPoint **pps_inputs)=0;
+	virtual void ReceiveAudioFromDAW(PatchPoint **pps_inputs, int first_input)=0;
+	virtual void ReceiveAudioFromDAW(float *inputs, int last_input)=0;
+	virtual void ReceiveAudioFromDAW(float *inputs, int first_input, int last_input)=0;
 
-	//inline void ReceiveAudioFromDAW(PatchPoint *inputs)=0;
-	virtual inline int GetNumberOfAudioFromDAW()=0;
-	virtual inline int GetNumberOfAudioToDAW()=0;
+	//void ReceiveAudioFromDAW(PatchPoint *inputs)=0;
+	virtual int GetNumberOfAudioFromDAW()=0;
+	virtual int GetNumberOfAudioToDAW()=0;
 	virtual void ProcessEvents(const EventsHandle ev)=0;
 	virtual void StartOfBlock(int sample_frames)=0;
 
@@ -83,6 +83,7 @@ public:
 	virtual void SetPPTags(long &ctag)=0;
 	virtual void ConstructTags2PP(PatchPoint **tags2pp, long &ctag, int nb_pp)=0;
 	virtual int GetControlsValuesSize()=0;
+	virtual void ZeroDAWModValues()=0;
 	virtual void SaveControlsValues(void *pdata)=0;
 	virtual void LoadControlsValues(void *pdata, int size)=0;
 	virtual int GetControlsTagsSize()=0;
@@ -99,7 +100,7 @@ public:
 	virtual void SetDAWSampleRate(float daw_sr)=0;		// SetSampleRate() will be imidiatly called after SetDAWSampleRate().
 	virtual void SetDAWBlockSize(float blocksize)=0;				// Called when ever DAW block size changes. This usually not neccesary to be implemented except for modules that need to know the DAW block size
 	//virtual void SetBlockSize(int bs)=0;
-	virtual void SetKnobsSmoothDelay(int del)=0;
+	virtual void SetKnobsSmoothDelay(float del)=0;
 	virtual int GetVersion()=0;				// -1 means no version is specified. But modules better override this with a real version number
 	virtual bool SetBandLimit(int bndlim)=0;				// Will only be called by solorack when bandlimit is changed/set by the user.
 	//static Product *Activate(char *fullname, char *email, char *serial);		// Activate Licence

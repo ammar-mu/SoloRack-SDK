@@ -1,5 +1,5 @@
-/*	SoloRack SDK v0.11 Beta
-	Copyright 2017-2022 Ammar Muqaddas
+/*	SoloRack SDK v0.2 Beta
+	Copyright 2017-2023 Ammar Muqaddas
 */
 
 
@@ -17,20 +17,55 @@
 #define __TWO_PI (2.0*__PI)
 
 
-//#include "ttmath-0.9.3\ttmath\ttmath.h"
-//typedef ttmath::Big<5,10> BigFloat;
 
 #define NO_TAG	2147483640
 #define NOSAVE_TAG	2147483639
 #define NEW_TAG	2147483638
 #define MAX_INT		2147483646
-#define SDK_VERSION		110
+#define SDK_VERSION		200
 #define RAND_BITMAP		-1
 #define ALL_MIDI_CHAN	-1
 #define BASE_MHEIGHT	291.0
 #define BASE_HP			12
 #define SYNTH_EXIT		-2
 #define SYSEX_MAXTAG	16
+
+// Some more constants
+#define SCREW_X	9
+#define SCREW_Y	9
+#define NUM_PP_BITMAPS	8
+#define NUM_SCREW_BITMAPS	10
+#define MAIN_KNOB_IMAGES 49
+#define MAIN_KNOB_BIG_IMAGES 99
+#define SMALL_KNOB_GRAY_IMAGES	31
+#define SMALL_KNOB_BLUE_IMAGES	31
+#define LED_BLUE_IMAGES	10
+#define LED_RED_IMAGES	10
+#define DIGITS_RED_IMAGES	10
+#define DIGITS_RED_ALPHA_IMAGES	26
+#define DIGITS_PLUS_MINUS_IMAGES	3
+#define CLOCK_WIDTH			0.3					// Percentage of the total clock cycle
+#define CLIPTIME 0.2							// Clip led pulse time in seconds
+#define TRIGTIME 0.1							// Trigger led pulse time in seconds
+#define LMIDITIME	0.1							// MIDI led pulse time in seconds
+#define MAX_CLOCK_WIDTH		0.1					// Max clock pulse width is seconds
+#define LED_PULSE_TIME		0.1					// Reasonably visible pulse time (sec)
+#define SMOOTH_DELAY		35					// (was 45) Time in milliseconds to allow a knob to reach it's value smoothly.
+#define HIGH_CV				0.25				
+#define LOW_CV				0.15
+#define MID_CV				((LOW_CV+HIGH_CV)/2.0)
+#define VERY_HIGH_CV		4.0
+#define MAX_LEVEL			(clip_level)
+#define DEFAULT_MAX_LEVEL	4.0					// 12db
+#define MIDI_TUNE_FACTOR	10.0				// The factor to achieve 0.1/oct tunning
+#define MIDI_MAX_DELAY		0.002				// SMALL. For some Generators. In seconds. Dictates MIDI buffer sizes
+#define MIDI_MAX_DELAY2		0.006				// MEDIUM. For mergers and such. In seconds. Dictates MIDI buffer sizes
+#define LOG2				0.69314718055994529
+#define LOG10				2.30258509299405
+#undef NONE_CPP_DESTRUCTOR
+#define VST2_FORMAT		0
+#define VST3_FORMAT		1		// Not suported yet
+#define CLAP_FORMAT		2
 
 // Special isTypeOf that doesn't go to parent. to capture PatchPoint and not get an error with the frame. //** find another effcient method
 #define CLASS_ISTYPEOF_SPECIFIC(name)             \
@@ -125,12 +160,24 @@ typedef struct OversampleSet
 #define IFMOVER(exp)
 #endif
 
-// Character stack definition
+// Stack definitions
 template <typename TP>
 struct cstack
 {	TP *pbottom;
 	int top;
 };
+
+template <typename TP>
+void InitStack(cstack<TP> &stackv,int size);
+
+template <typename TP>
+void FreeStack(cstack<TP> &stackv);
+
+#define PUSH(stackv,value) stackv.pbottom[++stackv.top]=value
+#define POP(stackv) stackv.pbottom[stackv.top--]
+#define FLUSHPOP(stackv) stackv.top--
+#define NOTEMPTY(stackv) stackv.top!=-1
+
 
 // DC blocker
 struct dcblock
@@ -141,6 +188,10 @@ struct dcblock
 #define DC_BLOCK_NEXT_SAMPLE(dcblk)	dcblk.in1=dcblk.in0;
 
 #define SET_NO_MIDI(midi)	*(int*) &(midi) = 0
+
+int gcd(int a, int b);
+int IntPow(int base, int exp);
+int IntLog(int v, int base);
 
 enum
 {	// Global
@@ -284,18 +335,27 @@ enum EventType
 	kMidiSysExType = 6
 };
 
-typedef struct DAWTempoPos
-{	double tempo;					// Tempo in BPM (Beats Per Minute)
-	double ppq_pos;					// Musical Position in quarter note (1.0 equals 1 quarter note)
-	double sample_pos;
+#define INVALID_DINFO		DBL_MAX
+enum DAWTimeflags
+{	kTransportChanged       = 1,		// Set when play, loop or record state has changed
+	kTransportIsPlaying     = 1 << 1,
+	kTransportLoopIsActive  = 1 << 2,
+	kTransportIsRecording   = 1 << 3,
+	kAutomationIsWriting    = 1 << 6,	// Set when host is recording parameter changes)
+	kAutomationIsReading    = 1 << 7,	// Set when host is playing parameter changes
 };
 
-typedef struct DAWLoopSig
-{	double last_bar_start_pos;		// Last bar start position in quarter notes
+typedef struct DAWTime
+{	int flags;
+	double tempo;					// Current tempo in BPM (Beats Per Minute)
+	double tempo_inc;				// Tempo increment (or decrement when negative) per sample
+	double ppq_pos;					// Musical Position in quarter note (1.0 equals 1 quarter note)
+	double sample_pos;
+	double last_bar_start_pos;		// Last bar start position in quarter notes
 	double loop_start_pos;			// Loop start in quarter Notes
 	double loop_end_pos;			// Loop end in quarter Notes
-	int time_sig_beats;				// Time signature beats (numerator)
-	int time_sig_bars;				// Time signature bars (denominator)
+	int time_sig_num;				// Time signature numerator. (beats per bar)
+	int time_sig_denom;				// Time signature denominator.
 };
 
 
@@ -340,8 +400,10 @@ typedef struct SynthComm
 	char *(*GetMIDIEventMessage)(EventHandle handle);			// This returns char[4]. An 4 byte array containing the MIDI message
 	int (*GetMIDISysExSize)(EventHandle handle);				// Size of SysEx message in bytes
 	char *(*GetMIDISysExMessage)(EventHandle handle);
+
+	bool (*SendEventsToDAW)(SynEditor *tthis, EventsHandle handle, void *callback);
 	
-	bool (*GetDAWTime)(SynEditor *tthis, DAWTempoPos *tp, DAWLoopSig *ls);		// If you want only one of the two params, pass NULL
+	bool (*GetDAWTime)(SynEditor *tthis, DAWTime *pt);
 
 	
 	// PatchPoint
@@ -385,6 +447,12 @@ typedef struct SynthComm
 	int (*ModuleGetNumberOfAudioToDAWPtr)(Module *tthis);
 	void (*ModuleEnterProcessingCriticalSectionPtr)(Module *tthis);
 	void (*ModuleLeaveProcessingCriticalSectionPtr)(Module *tthis);
+
+	// For Clap. Mainly to support poly modulation
+	// Index here is the last data char of the MIDI note ON message. This is injected by SoloRack. in the MIDI message
+	bool (*SetVoiceUsed)(SynEditor *tthis, int voice, int index);
+	bool (*UnSetVoiceUsed)(SynEditor *tthis, int voice, int index);
+	short (*GetPluginFormat)(SynEditor *tthis);
 };
 
 // Park miller random generator
@@ -486,9 +554,9 @@ public:
 	// The following is used for Dll modules.
 	static CMessageResult ClassNotify(PatchPoint *tthis, CBaseObject* sender, const char* message);
 
-	inline void SetType(int pptype);
-	inline void SetProtocol(int ppprotocol);
-	inline long GetPPTag() { return pptag; }
+	void SetType(int pptype);
+	void SetProtocol(int ppprotocol);
+	long GetPPTag() { return pptag; }
 
 	//CLASS_ISTYPEOF_SPECIFIC(PatchPoint)						//** think of way to do this
 	CLASS_METHODS(PatchPoint, CMovieBitmap)
@@ -547,9 +615,12 @@ public:
 	static CMouseEventResult ClassOnMouseMoved(ModuleKnob *tthis, CPoint& where, const long& buttons);
 	//void  setValue (float val) { value = val; }
 
-	//inline float GetSValue() const { return svalue; }
+	//float GetSValue() const { return svalue; }
 	void setValue(float val);
 	void UpdateQValue();
+
+	// Some of the following smoothing functions are very often used. So it's worth trying to optimize them
+	// and have different versions, each better for different cases instead of one general purpose function
 
 	// Update Smoothed movment value
 	inline void UpdateSValue()
@@ -559,7 +630,7 @@ public:
 			// This is true no matter what the range is because the maximum change will be a/1 //** check again
 			if (a<0.001 && a>-0.001) { svalue=value; return; }
 			
-			svalue+=a/smooth_samples;
+			svalue+=a*smooth_samples_1;		// smooth_samples_1 = 1/smooth_samples. 
 		}
 	}
 
@@ -574,7 +645,7 @@ public:
 			// The caller must insure that. Otherwise svalue may go up and down fluctuating!!
 			if (a<half_margin && a>-half_margin) { svalue=value; return; }
 			
-			svalue+=a/smooth_samples;
+			svalue+=a*smooth_samples_1;
 		}
 	}
 
@@ -591,7 +662,7 @@ public:
 			//{	sv_change2/=2; 
 			//	if (b<=0.000001) { svalue=value; sv_change2=sv_change; return; }
 			//}
-			svalue+=a/smooth_samples;
+			svalue+=a*smooth_samples_1;
 			return false;
 		} else return true;
 	}
@@ -607,7 +678,7 @@ public:
 			//{	sv_change2/=2; 
 			//	if (b<=0.000001) { svalue=value; sv_change2=sv_change; return; }
 			//}
-			svalue+=a/smooth_samples;
+			svalue+=a*smooth_samples_1;
 		}
 	}
 
@@ -622,7 +693,7 @@ public:
 			//{	sv_change2/=2; 
 			//	if (b<=0.000001) { svalue=value; sv_change2=sv_change; return; }
 			//}
-			svalue+=a/smooth_samples;
+			svalue+=a*smooth_samples_1;
 			return false;
 		} else return true;
 	}
@@ -640,16 +711,28 @@ public:
 			return (long) (value*(float)temp);
 	}
 
-	// Smooth using exponential decay (Well not really exponencial)
-	#define ExpUpdateSValue(value,svalue,sm_sam)		\
+	// The following smoothing macros have either sm_sam or sm_sam_1 variables
+	// sm_sam = 1/sm_sam_1 = smoothing delay in samples
+
+	// Just like the above functions but in macro form. Smooth using exponential decay (Well not really exponential)
+	#define ExpUpdateSValue(value,svalue,sm_sam_1)		\
 	{	float a = value-svalue;							\
 		if (a!=0.0)										\
-		{	if (a<0.001 && a>-0.001) svalue=value;		/*if abs(a)< (a<=0.001 && a>=-0.001)*/	\
+		{	if (a<0.001 && a>-0.001) svalue=value;		\
+			else svalue+=a*sm_sam_1;					\
+		}												\
+	}
+	#define ExpUpdateSValueQuick(value,svalue,sm_sam_1)		\
+	{	svalue += (value-svalue)*sm_sam_1;					\
+	}
+	// Same as above but uses division instead of mutiplication
+	#define ExpUpdateSValueDiv(value,svalue,sm_sam)		\
+	{	float a = value-svalue;							\
+		if (a!=0.0)										\
+		{	if (a<0.001 && a>-0.001) svalue=value;		\
 			else svalue+=a/sm_sam;						\
 		}												\
 	}
-
-	#define KnobUpdataSValue(knob) ExpUpdateSValue(knob->value,knob->svalue,knob->smooth_samples)
 
 	// Smooth using constant Rate (not being used so far)
 	#define RateUpdateSValue(value,svalue,sm_sam)			\
@@ -692,35 +775,37 @@ public:
 		} else svalue=(value);				\
 	}
 
-	// Must be called when value has changed
-	#define ZTimeCalcInc(value,svalue,sm_sam2,inc,prevalue)		\
-	{	float a = (value)-svalue;					\
-		inc=a/(sm_sam2); prevalue=value;				\
-	}
-
 	// Smooth using Constant time
-	#define ZTimeUpdateSValue(value,svalue,sm_sam,sm_sam2,inc,prevalue)		\
+	#define ZTimeUpdateSValue(value,svalue,sm_sam,sm_sam2)		\
 	{	if ((sm_sam)!=0.0)									\
 		{	/*Update Smoothed movment value*/				\
 			float a = (value)-svalue;						\
 			if (a!=0.0)										\
-			{	if (prevalue!=value) { inc=a/(sm_sam2); prevalue=value; }	\
+			{	float inc=a/(sm_sam2); 						\
 				if ((a>0 && a<=inc) || (a<0 && a>=inc)) svalue=(value);		/*assuming a and b are always the same sign*/	\
 				else svalue+=inc;											\
 			}															\
 		} else svalue=(value);								\
 	}
 
+	//// Used with the above macro. Must be called only when value has changed
+	//#define ZTimeCalcInc(value,svalue,sm_sam2,inc,prevalue)		\
+	//{	float a = (value)-svalue;					\
+	//	inc=a/(sm_sam2); prevalue=value;				\
+	//}
+
 	//CMessageResult notify(CBaseObject* sender, const char* message);
-	void SetSmoothDelay(int del, Module *parent = NULL);
+	void SetSmoothDelay(float del, Module *parent = NULL);
 
 	inline void InitValue(float v) { value=v; svalue=v; }
 
 	double svalue;		// Smoothed movment value. I will define this as public to allow direct access if you want to avoid the overhead of the GetSValue()
 	float qvalue;		// Quantized value. If the knob is a stepping knob
+	float mvalue;		// Modulation value. This was added latter to support CLAP poly modulation. This gets added to svalue which is final value.
 	bool is_stepping;	// is or not stepping knob. The number of steps is equal to the number of sub bitmaps (subPixmaps)
-	float smooth_samples;
-	int delay;
+	float smooth_samples_1;		// Definition changed since SDK version 0.12 to be RESIPROCAL of smooth samples delay instead of smooth samples delay. 
+								// This will avoid using division in UpdateSValue()
+	float delay;
 	//CVSTGUITimer timer;
 
 	//CLASS_ISTYPEOF_SPECIFIC(ModuleKnob)
@@ -728,11 +813,11 @@ public:
 };
 
 // Smooth using exponential decay (Well not really exponencial)
-inline bool ExpUpdateSValueReached(const double value,double &svalue,double sm_sam)
+inline bool ExpUpdateSValueReached(const double value,double &svalue,double sm_sam_1)
 {	double a = value-svalue;
 	if (a!=0.0)	
 	{	if (a<0.001 && a>-0.001) { svalue=value; return true; }
-		else svalue+=a/sm_sam;
+		else svalue+=a*sm_sam_1;
 		return false;
 	}
 	else return true;
@@ -1063,17 +1148,17 @@ public:
 	virtual bool GetIsMonoDefault() { return true; }	
 	virtual bool IsAudioToDAW() { return false; }
 	virtual bool IsPolyManager() { return false; }
-	inline void SendAudioToDAW(float left, float right);
-	inline void SendAudioToDAW(PatchPoint **pps_outputs);
-	inline void SendAudioToDAW(PatchPoint **pps_outputs, int first_output);
-	inline void SendAudioToDAW(float *outputs, int last_output);
-	inline void SendAudioToDAW(float *outputs, int first_output, int last_output);
+	void SendAudioToDAW(float left, float right);
+	void SendAudioToDAW(PatchPoint **pps_outputs);
+	void SendAudioToDAW(PatchPoint **pps_outputs, int first_output);
+	void SendAudioToDAW(float *outputs, int last_output);
+	void SendAudioToDAW(float *outputs, int first_output, int last_output);
 
-	inline void ReceiveAudioFromDAW(float *left, float *right);
-	inline void ReceiveAudioFromDAW(PatchPoint **pps_inputs);
-	inline void ReceiveAudioFromDAW(PatchPoint **pps_inputs, int first_input);
-	inline void ReceiveAudioFromDAW(float *inputs, int last_input);
-	inline void ReceiveAudioFromDAW(float *inputs, int first_input, int last_input);
+	void ReceiveAudioFromDAW(float *left, float *right);
+	void ReceiveAudioFromDAW(PatchPoint **pps_inputs);
+	void ReceiveAudioFromDAW(PatchPoint **pps_inputs, int first_input);
+	void ReceiveAudioFromDAW(float *inputs, int last_input);
+	void ReceiveAudioFromDAW(float *inputs, int first_input, int last_input);
 
 	static void ClassSendAudioToDAW(Module *tthis, float left, float right);
 	static void ClassSendAudioToDAW(Module *tthis, PatchPoint **pps_outputs);
@@ -1087,8 +1172,8 @@ public:
 	static void ClassReceiveAudioFromDAW(Module *tthis, float *inputs, int last_input);
 	static void ClassReceiveAudioFromDAW(Module *tthis, float *inputs, int first_input, int last_input);
 
-	inline int GetNumberOfAudioFromDAW();
-	inline int GetNumberOfAudioToDAW();
+	int GetNumberOfAudioFromDAW();
+	int GetNumberOfAudioToDAW();
 	static int ClassGetNumberOfAudioFromDAW(Module *tthis);
 	static int ClassGetNumberOfAudioToDAW(Module *tthis);
 	virtual void ProcessEvents(const EventsHandle ev);
@@ -1103,6 +1188,7 @@ public:
 	void SetPPTags(long &ctag);
 	void ConstructTags2PP(PatchPoint **tags2pp, long &ctag, int nb_pp);
 	int GetControlsValuesSize();
+	void ZeroDAWModValues();
 	void SaveControlsValues(void *pdata);
 	void LoadControlsValues(void *pdata, int size);
 	int GetControlsTagsSize();
@@ -1119,7 +1205,7 @@ public:
 	virtual void SetDAWSampleRate(float daw_sr) { DAW_sample_rate = daw_sr; }			// SetSampleRate() will be imidiatly called after SetDAWSampleRate().
 	virtual void SetDAWBlockSize(float blocksize);				// Called when ever DAW block size changes. This usually not neccesary to be implemented except for modules that need to know the DAW block size
 	//virtual void SetBlockSize(int bs);
-	virtual void SetKnobsSmoothDelay(int del);
+	virtual void SetKnobsSmoothDelay(float del);
 	virtual int GetVersion() { return -1; }				// -1 means no version is specified. But modules better override this with a real version number
 	virtual bool SetBandLimit(int bndlim);				// Will only be called by solorack when bandlimit is changed/set by the user.
 	static Product *Activate(char *fullname, char *email, char *serial);		// Activate Licence
@@ -1253,7 +1339,7 @@ protected:
 	SoloRack *psynth;
 	SynEditor *peditor;
 	SynthComm synth_comm;				// Used with Dll Modules. Contains all callback function pointers to comunicate with SoloRack.
-	float clip_level;					// Clipping level in voltage. // Added after SDK v0.1 Alpha (on SDK v0.2) 
+	float clip_level;					// Clipping level in voltage. // Added after SDK v0.1 Alpha
 	int voice;							// Used for polyphony. To indicate which voice this module is working for. if voice>0, it's invisible from the screen.
 	//COptionMenu *modtype_menu;		// Module type menu
 	//int menu_index;						
@@ -1269,147 +1355,6 @@ private:
 	int orphindex;						// Index in the orphanmods[] array
 	CTextLabel *demolabel;
 	char *infourl;						// This should have been static. But I'm sick of having to deal with it.
-};
-
-
-
-//---------------------------------------------
-// TestMixer
-
-//#define TESTMIXER_NUM_KNOBS		4
-class TestMixer : public Module
-{
-public:
-
-	TestMixer(CFrame *pParent, CControlListener *listener, const SynthComm *psynth_comm, const int vvoice=0);
-
-	//~TestMixer();
-
-	static void Initialize();
-	static void End();
-	static const int GetType();
-	static Product *Activate(char *fullname, char *email, char *serial);				// Activate Licence
-	static bool IsActive();	
-	static TestMixer *Constructor(CFrame *pParent, CControlListener *listener, const SynthComm *psynth_comm, const int vvoice=0);										// Used to construct modules that are imported for Dll files. Each sub class should define it's own Constructor.
-	static const char *GetProductName();
-	const char *GetName();
-	const int GetNameLen();
-	const char *GetVendorName();
-	const int GetVendorNameLen();
-	inline void ProcessSample();
-	int GetVersion() { return 1000; }														// Is Licence activated ?
-	Product *InstanceActivate(char *fullname, char *email, char *serial);		// Virtual Version
-	bool InstanceIsActive();													// Virtual Version
-	void ValueChanged(CControl* pControl);
-	bool GetIsMonoDefault() { return false; }
-
-	static Product *pproduct;
-	static char *name;					// Module title name that will be displayed in the menu
-	static int name_len;				// Length of the name string excluding terminating NULL.
-	static char *vendorname;			// Module vendor name
-	static int vendorname_len;			// Length of the vendor name string excluding terminating NULL.
-
-protected:
-	static CBitmap *panel;
-
-private:
-	// Inputs
-	//float in1, in2, in3, in4;
-	
-	// Input connections (cables)
-	//float *pin1,*pin2,*pin3,*pin4;
-
-	// Outputs
-	//float out;
-	
-	// Knobs
-	ModuleKnob *kin1,*kin2,*kin3, *kout;
-
-	// Knobs. If you want to use a change pool, you'll have to define them as ModuleKnobEx
-	//ModuleKnobEx *kin1,*kin2,*kin3, *kout;
-
-	// Patch points
-	PatchPoint *ppin1,*ppin2,*ppin3,*ppin4,*ppin5,*ppout;
-
-	// Switches
-	CVerticalSwitch *sw1;
-
-	// Screws
-	CMovieBitmap *screw1,*screw2;
-
-	// knob change pool
-	//ModuleKnobExPool<TESTMIXER_NUM_KNOBS> chpool;
-
-	// Other
-	bool invert;
-
-};
-
-
-//---------------------------------------------
-// TestTempoFromDAW
-class TestTempoFromDAW : public Module
-{
-public:
-
-	TestTempoFromDAW(CFrame *pParent, CControlListener *listener, const SynthComm *psynth_comm, const int vvoice=0);
-
-	//~TestTempoFromDAW();
-
-	static void Initialize();
-	static void End();
-	static TestTempoFromDAW *Constructor(CFrame *pParent, CControlListener *listener, const SynthComm *psynth_comm, const int vvoice=0);										// Used to construct modules that are imported for Dll files. Each sub class should define it's own Constructor.
-	static const char *GetProductName();
-	static Product *Activate(char *fullname, char *email, char *serial);		// Activate Licence
-	static bool IsActive();
-	static const int GetType();
-	const char *GetName();
-	const int GetNameLen();
-	const char *GetVendorName();
-	const int GetVendorNameLen();
-	virtual void SetSampleRate(float sr);
-	virtual void LoadPreset(void *pdata, int size, int version);
-	inline void ProcessSample();
-	void StartOfBlock(int sample_frames);
-	virtual int GetVersion() { return 1000; }
-	virtual void ValueChanged(CControl* pControl);
-	virtual bool GetAlwaysONDefault() { return true; }	
-	virtual Product *InstanceActivate(char *fullname, char *email, char *serial);		// Virtual Version
-	virtual bool InstanceIsActive();													// Virtual Version
-
-	static char *name;					// Module title name that will be displayed in the menu
-	static int name_len;				// Length of the name string excluding terminating NULL.
-	static char *vendorname;			// Module vendor name
-	static int vendorname_len;			// Length of the vendor name string excluding terminating NULL.
-	static Product *pproduct;
-	
-	//CMouseEventResult onMouseDown (CPoint &where, const long& buttons);
-	//CMouseEventResult onMouseUp (CPoint &where, const long& buttons);
-	//CMouseEventResult onMouseMoved (CPoint &where, const long& buttons);
-
-protected:
-	static CBitmap *panel;
-
-private:
-	// Knobs
-	ModuleKnob *kdivisor;
-
-	// Patch points
-	PatchPoint *ppclock,*pprestart;
-
-	// Leds
-	CMovieBitmap *lclock;
-
-	// Screws
-	CMovieBitmap *screw1,*screw2;
-
-	// Events array (Queue)
-	int pspc,chigh;							// pspc is a Percentage * Samples Per Clock
-	float mult,last_restart;
-	long divisor;
-
-	double ppqpos;							// Position Per Quarter note (after division). BUT this will not go more than 1.0
-	double tempo,tempo_smp;					// tempo is BPM, tempo_smp is BPS (beats per sample)
 };
 
 

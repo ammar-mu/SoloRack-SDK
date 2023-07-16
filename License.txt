@@ -1,7 +1,7 @@
 With a few exceptions mentioned bellow, The "SoloRack SDK" is released under the following terms.
 
 --- LICENSE BEGIN ---
-Copyright 2017-2022 Ammar Muqaddas.
+Copyright (c) 2022 Ammar Muqaddas.
 
 Boost Software License - Version 1.0 - August 17th, 2003
 
@@ -30,7 +30,7 @@ DEALINGS IN THE SOFTWARE.
 
 EXCEPTIONS:
 
-- The files in the folders "VstGui" and "VstGui Patch" are NOT part of the "SoloRack SDK" and are NOT covered by this license.  These are derived/modified from VSTGUI original files. The license for those two files are included inside them. 
+- The files in the folder "VstGui" are NOT part of the "SoloRack SDK" and are NOT covered by this license.  These are derived/modified from VSTGUI original files. The license for those files are included inside them. 
 
 - A few classes like CSpecialDigitEx, CKickButtonEx, CMovieBitmapEx and other ..Ex functions or else wherever indicated, Have functions or structures that are derived/modified from VSTGUI originals. Therefore these functions or structures are licensed under the original VSTGUI license and are not considered part of this SDK. Those are clearly indicated with comments in the code.
 

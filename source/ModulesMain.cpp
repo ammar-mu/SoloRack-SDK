@@ -1,11 +1,4 @@
-// ../../../../..;../../../../../vstgui.sf/vstgui;../../../../../public.sdk/source/vst2.x;../../SoloRack/source
-//#include "audioeffect.h"
-
-//#ifndef __Configuration__
-//#include ".\Configuration.h"
-//#endif
-
-#include "Modules.h"
+#include "TestModules.h"
 
 #if WIN32
 #include <windows.h>

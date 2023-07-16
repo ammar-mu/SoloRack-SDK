@@ -1,1 +1,0 @@
-The files contained in this folder are NOT part of the "SoloRack SDK". The license for those files can be found inside them.
