@@ -1,4 +1,6 @@
 # SoloRack SDK
+
+**(SDK will be updated within the next 24 hours to support the new version of SoloRack v2.2)**
  
  [SoloRack](http://www.solostuff.net/solorack) SDK (Software Development Kit) allows 3rd party developers to create SoloRack plugins that contain external modules that can be loaded and used in SoloRack.
  
